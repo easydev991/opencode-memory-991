@@ -1,0 +1,20 @@
+{
+  "name": "opencode-memory-991",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./server": "./src/plugin.ts"
+  },
+  "scripts": {
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "biome check . && tsc --noEmit && bun test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.4",
+    "@types/bun": "^1.4.4",
+    "typescript": "^5"
+  }
+}
