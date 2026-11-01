@@ -1,6 +1,7 @@
 {
   "name": "opencode-memory-991",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "exports": {
     "./server": "./src/plugin.ts"
