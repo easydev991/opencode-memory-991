@@ -1,8 +1,20 @@
 {
-  "name": "opencode-memory-991",
-  "private": true,
+  "name": "ocm991",
+  "version": "0.1.0",
+  "description": "Плагин долговременной памяти для opencode: факты и предпочтения прошлых сессий попадают в контекст новых.",
+  "keywords": [
+    "opencode",
+    "plugin",
+    "memory",
+    "agents",
+    "long-term-memory"
+  ],
+  "author": "Oleg (easydev991)",
   "license": "MIT",
   "type": "module",
+  "files": [
+    "src"
+  ],
   "exports": {
     "./server": "./src/plugin.ts"
   },
@@ -11,7 +23,8 @@
     "lint:fix": "biome check --write .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "check": "biome check . && tsc --noEmit && bun test"
+    "check": "biome check . && tsc --noEmit && bun test",
+    "prepublishOnly": "bun run check"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.4",

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Плагин памяти для opencode v2 (`opencode-memory-991`). Приватный локальный проект; npm/GitHub-релизы не нужны — потребление через локальный путь в глобальном `~/.config/opencode/opencode.json` (hot-reload).
+Плагин памяти для opencode v2 (`opencode-memory-991`; в npm публикуется как `ocm991`). Потребление — через npm-имя `ocm991` в `plugin`-массиве конфига opencode; при разработке — локальный путь в глобальном `~/.config/opencode/opencode.json` (hot-reload).
 
 - Стек: TypeScript, Bun. Без runtime-зависимостей. Тесты: `bun test` из корня (в этом репо можно, в отличие от monorepo opencode).
 - Планы и актуальная документация — в `openspec/` (главные спеки `openspec/specs/`, завершённые change — `openspec/changes/archive/`); не расширяй скоуп без запроса.
