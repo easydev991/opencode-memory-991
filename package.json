@@ -10,6 +10,10 @@
     "long-term-memory"
   ],
   "author": "Oleg (easydev991)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/easydev991/opencode-memory-991.git"
+  },
   "license": "MIT",
   "type": "module",
   "files": [
