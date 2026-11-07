@@ -1,12 +1,16 @@
 /**
  * Плагин памяти для opencode v2: default-экспорт { id, setup } на пути ./server.
- * Структурные типы поверхности Promise-плагина (@opencode/plugin) повторены локально
- * минимально: пакет в репозитории не установлен, runtime-зависимостей быть не должно.
+ * SDK @opencode/plugin — devDependency: типы, не конфликтующие с тестовыми двойниками
+ * хоста, импортируются через import type (Registration, SessionContext, Tool.Result);
+ * импортируются только типы — runtime-зависимостей быть не должно.
  */
 
 import type { Dirent } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
+import type { Registration } from "@opencode/plugin/promise/registration";
+import type { SessionContext } from "@opencode/plugin/promise/session";
+import type { Result } from "@opencode/plugin/promise/tool";
 
 import {
   isMemoryType,
@@ -21,13 +25,16 @@ import { redactCredentials } from "./redaction";
 import { atomicWriteText, LOCK_WAIT_TIMEOUT_MS, withFileLock } from "./storage";
 
 // ============================================================
-// Структурные типы opencode v2 Promise plugin API
+// Типы поверхности opencode v2 Promise plugin API.
+// Часть типов — import type из SDK @opencode/plugin (Registration, SessionContext,
+// Tool.Result). SDK-типы доменов хоста (Plugin.Context["session"|"tool"|"event"]),
+// полного входа context-хука (SessionContext), контекста вызова (ToolContext) и
+// Plugin.Plugin остаются структурными: SDK брендирует SessionID/AbsolutePath и требует
+// полный набор полей доменов, а тестовые двойники хоста (src/plugin.*.test.ts)
+// конструктивны по структурным подмножествам поверхности.
 // ============================================================
 
-export interface ToolRegistration {
-  dispose(): Promise<void> | void;
-}
-
+/** Событие шины хоста для памяти (session.deleted / session.compaction.ended). */
 export interface MemoryEvent {
   type: string;
   data: { sessionID: string };
@@ -37,26 +44,22 @@ export interface EventDomain {
   subscribe(options?: { signal?: AbortSignal }): AsyncIterable<MemoryEvent>;
 }
 
-/** Часть system-сообщения (opencode SystemPart: type "text" + текст + метаданные). */
-export interface SystemPart {
-  type: "text";
-  text: string;
-  metadata?: Record<string, unknown>;
-}
-
-/** Вход session-хука "context" (opencode SessionContext). */
-export interface SessionContextInput {
+/**
+ * Вход session-хука "context" (opencode SessionContext): system-части — SDK SystemPart
+ * из SessionContext; sessionID/messageID — структурные строки (SDK брендирует SessionID
+ * и требует поля agent/tools/model/messages, отсутствующие у тестовых двойников хоста).
+ */
+export type SessionContextInput = Pick<SessionContext, "system"> & {
   sessionID: string;
   /** Хост не всегда передаёт (системные вызовы без сообщения) — отсутствие не ошибка. */
   messageID?: string;
-  system: SystemPart[];
-}
+};
 
 export interface SessionDomain {
   hook(
     name: "context",
     handler: (input: SessionContextInput) => Promise<void> | void,
-  ): Promise<ToolRegistration> | ToolRegistration;
+  ): Promise<Registration> | Registration;
   get(input: { sessionID: string }): Promise<{ id?: string; parentID?: string }>;
 }
 
@@ -65,7 +68,7 @@ export interface ToolEditor {
 }
 
 export interface ToolDomain {
-  transform(apply: (editor: ToolEditor) => void): Promise<ToolRegistration> | ToolRegistration;
+  transform(apply: (editor: ToolEditor) => void): Promise<Registration> | Registration;
 }
 
 export interface PluginContext {
@@ -75,8 +78,13 @@ export interface PluginContext {
   event: EventDomain;
 }
 
-/** Plain JSON Schema (Tool.ValueSchema допускает JsonSchema без зависимости от effect). */
+/**
+ * Plain JSON Schema (Tool.ValueSchema допускает JsonSchema без зависимости от effect).
+ * Индексная сигнатура повторяет форму effect-JsonSchema ({ [x: string]: unknown }) —
+ * без неё схема инструмента не проходит структурную проверку Tool.ValueSchema (TS2345).
+ */
 interface JsonSchemaNode {
+  [key: string]: unknown;
   type?: string;
   properties?: Record<string, JsonSchemaNode>;
   required?: string[];
@@ -85,12 +93,7 @@ interface JsonSchemaNode {
   description?: string;
 }
 
-export interface ToolExecution {
-  output: unknown;
-  content?: string;
-  metadata?: Record<string, unknown>;
-}
-
+/** Контекст вызова инструмента: структурный дубль SDK ToolContext (SessionID/agent/... брендированы). */
 export interface ToolCallContext {
   sessionID: string;
 }
@@ -101,7 +104,8 @@ export interface MemoryTool {
   options: { codemode: false };
   input: JsonSchemaNode;
   output?: JsonSchemaNode;
-  execute(input: Record<string, unknown>, context: ToolCallContext): Promise<ToolExecution>;
+  /** input: unknown — SDK Info.execute передаёт InputValue<Input> = unknown (контравариантность). */
+  execute(input: unknown, context: ToolCallContext): Promise<Result>;
 }
 
 export interface MemoryPlugin {
@@ -221,7 +225,7 @@ function failure(code: string, message: string, suggestion: string): MemoryError
   return { ok: false, error: { code, message, suggestion } };
 }
 
-function errorExecution(code: string, message: string, suggestion: string): ToolExecution {
+function errorExecution(code: string, message: string, suggestion: string): Result {
   const output = failure(code, message, suggestion);
   return { output, content: saveSummary(output) };
 }
@@ -380,7 +384,7 @@ function createMemorySaveTool(memoryDir: string, session: SessionDomain): Memory
   const project = basename(dirname(memoryDir));
   // Ранние отказы валидации тоже видны в логе: иначе «отказ валидации» неотличим
   // от «инструмент не вызывали» (сценарий смоука 6.2.8).
-  const rejectionWithLog = (code: string, message: string, suggestion: string): ToolExecution => {
+  const rejectionWithLog = (code: string, message: string, suggestion: string): Result => {
     logMemory(`save: [${project}] -> rejected (${code})`);
     return errorExecution(code, message, suggestion);
   };
@@ -418,9 +422,10 @@ function createMemorySaveTool(memoryDir: string, session: SessionDomain): Memory
     },
     output: { type: "object" },
     async execute(input, toolContext) {
+      const args = input as Record<string, unknown>;
       let savedName: string | undefined;
       try {
-        const text = stringField(input, "text");
+        const text = stringField(args, "text");
         if (text === undefined || text.trim().length === 0) {
           return rejectionWithLog(
             "INVALID_TEXT",
@@ -428,7 +433,7 @@ function createMemorySaveTool(memoryDir: string, session: SessionDomain): Memory
             "Provide the fact to remember as the text argument.",
           );
         }
-        const name = stringField(input, "name");
+        const name = stringField(args, "name");
         if (name === undefined || !isValidMemoryName(name)) {
           return rejectionWithLog(
             "INVALID_NAME",
@@ -438,7 +443,7 @@ function createMemorySaveTool(memoryDir: string, session: SessionDomain): Memory
             "Use a short kebab-case slug of lowercase latin letters, digits and hyphens, for example editor-preference.",
           );
         }
-        const type = stringField(input, "type");
+        const type = stringField(args, "type");
         if (type === undefined || !isMemoryType(type)) {
           return rejectionWithLog(
             "INVALID_TYPE",
@@ -486,7 +491,7 @@ function createMemorySaveTool(memoryDir: string, session: SessionDomain): Memory
         }
         const overLimit = stored.length > MEMORY_SAVE_SOFT_LIMIT_CHARS;
         const key = canonicalMemoryKey(type, stored);
-        const provided = stringField(input, "description");
+        const provided = stringField(args, "description");
         // Гейт инжекции действует и на description: она попадает в frontmatter → строку
         // индекса (formatHook редактирует только секреты) → снапшот MEMORY.md → system-промпты
         // будущих сессий, как и сам текст. Проверяется сырая строка — до схлопывания пробелов,
@@ -783,7 +788,7 @@ const INSTANCE_GUARD = Symbol.for("opencode-memory-991.instance");
 
 async function setupMemoryPlugin(context: PluginContext): Promise<() => Promise<void>> {
   const memoryDir = resolveProjectMemoryDir(context.location.project.canonical);
-  const registrations: ToolRegistration[] = [];
+  const registrations: Registration[] = [];
   const sessionStates = createSnapshotCache(SNAPSHOT_CACHE_LIMIT);
   const queues = new Map<string, Promise<void>>();
   const inflight = new Set<Promise<void>>();

@@ -1,9 +1,10 @@
 {
   "name": "ocm991",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Плагин долговременной памяти для opencode: факты и предпочтения прошлых сессий попадают в контекст новых.",
   "keywords": [
     "opencode",
+    "opencode-plugin",
     "plugin",
     "memory",
     "agents",
@@ -32,6 +33,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.6.4",
+    "@opencode/plugin": "^2.2.6",
     "@types/bun": "^1.4.4",
     "typescript": "^5"
   }
